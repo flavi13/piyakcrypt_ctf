@@ -15,9 +15,12 @@ ATAQUE:
 8. Se verifica con la clave pública 
 9.  Se ejecuta el script abriendo la ip en consola y enseñando el panel del código que nos dan, se selecciona la opción 6 de mandar respuesta y se envía y aparece la flag 
     
+## Resultado
 
-RESULTADO:     
-sage -python solve.py
+Ejecutando el solver contra el reto real:
+
+```
+$ sage -python solve.py
 [*] Collecting data-panel leaks (9x)...
     read batch 1/9, total entries: 78
     read batch 2/9, total entries: 156
@@ -58,7 +61,9 @@ sage -python solve.py
 [*] Running HNP lattice attack per unit...
 [+] Recovered secret for unit 0: 61510954339560518939547126329213547641079480598258146797275258950427988754935
 [*] Submitting...
- (integer):
-  Accepted for unit #0.
 
-  COMPFEST18{b1as3d_n0nc3_mt_r3c0v3ry_lll_hnp_go_brr_727e3a9724b244c1}
+  Accepted for unit #0.
+```
+```
+COMPFEST18{b1as3d_n0nc3_mt_r3c0v3ry_lll_hnp_go_brr_727e3a9724b244c1}
+```
