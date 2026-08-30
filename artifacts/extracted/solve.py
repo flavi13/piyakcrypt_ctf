@@ -11,7 +11,7 @@ from fpylll import IntegerMatrix, LLL # hacer la reduccion
 IP = "34.2.147.230"
 PUERTO = 3002
 
-# --- parametros de la curva secp256k1, los saque del codigo fuente tal cual ---
+# los saque del codigo fuente 
 P = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F
 A = 0
 B = 7
@@ -33,12 +33,11 @@ D_SIZE = 256 - A_HIGH_SIZE - A_LOW_SIZE
 
 
 def inv_mod(x, m):
-    # "dividir" en modular, esto lo usamos todo el rato
+
     return pow(x, -1, m)
 
 
-# --- funciones de curva eliptica, copiadas casi calcadas del reto ---
-
+# suma de puntos
 def suma_puntos(p1, p2):
     if p1 is None:
         return p2
@@ -58,7 +57,7 @@ def suma_puntos(p1, p2):
 
 
 def mult_punto(k, pt):
-    # multiplicacion escalar tipo "doblar y sumar", lo tipico de curvas elipticas
+    # multiplicacion 
     if k % N == 0 or pt is None:
         return None
     k %= N
@@ -71,9 +70,7 @@ def mult_punto(k, pt):
         k >>= 1
     return res
 
-
-# --- estas funciones son para deshacer el "disfraz" de la opcion 5 y ---
-# --- para reconstruir el pedazo de nonce que predecimos con randcrack ---
+# reconstruir el pedazo de nonce que predecimos con randcrack
 
 def rol32(x, r):
     r &= 31
@@ -92,7 +89,7 @@ def rol64(x, r):
 
 
 def disfraza_valor(x, pos):
-    # esta es panel_value() del reto, la copio para entender como funciona
+    #  panel_value() del reto 
     salt = (0xA5A5A5A5 + pos * 0x6D2B79F5) & MASK32
     bump = (0x9E3779B9 ^ (pos * 0x85EBCA6B)) & MASK32
     y = rol32(x ^ salt, pos * 7 + 3)
@@ -100,8 +97,7 @@ def disfraza_valor(x, pos):
 
 
 def desdisfraza_valor(v, pos):
-    # y esta es la funcion inversa, para sacar el numero random de verdad
-    # (basicamente panel_value() pero haciendo cada paso al reves)
+    # funcion inversa
     salt = (0xA5A5A5A5 + pos * 0x6D2B79F5) & MASK32
     bump = (0x9E3779B9 ^ (pos * 0x85EBCA6B)) & MASK32
     y = (v - bump) & MASK32
@@ -109,8 +105,7 @@ def desdisfraza_valor(v, pos):
     return x ^ salt
 
 
-def revuelve_pieza(x, pos, lane):
-    # esto es fold_piece() del reto, tal cual
+def revuelve_pieza(x, pos, lane): 
     x ^= ((pos + 1) * 0xD6E8FEB86659FD93 + lane * 0xA0761D6478BD642F) & MASK64
     x = rol64(x, 17 + pos * 9 + lane * 23)
     x = (x * 0x9E6C63D0676A9A99 + 0xD1B54A32D192ED03) & MASK64
@@ -118,24 +113,20 @@ def revuelve_pieza(x, pos, lane):
 
 
 def arma_trozo_nonce(a, b, pos):
-    # make_piece() del reto: junta dos numeros de 64 bits en uno de 128
+    # make_piece() del reto, junta dos numeros de 64 bits en uno de 128
     return (revuelve_pieza(a, pos, 0) << 64) | revuelve_pieza(b, pos, 1)
 
-
-# --- parte 1: clonar el generador random usando lo que sacamos con la opcion 5 ---
+#
 
 def clonar_random(panel):
-    # panel es un diccionario {posicion: valor disfrazado}
     n = len(panel)
     numeros = [desdisfraza_valor(panel[p], p) for p in range(n)]
 
     rc = RandCrack()
-    # con las primeras 624 salidas ya se puede reconstruir TODO el estado interno
     for w in numeros[:624]:
         rc.submit(w)
 
-    # con las que sobran comprobamos que hemos clonado bien (si predecimos
-    # y coincide con lo que ya sabiamos, vamos por buen camino)
+    #  comprobación 
     todo_bien = True
     for p in range(624, n):
         if rc.predict_getrandbits(32) != numeros[p]:
@@ -146,18 +137,15 @@ def clonar_random(panel):
 
 def predecir_chunk_a(rc, pos):
     # cada firma gasta 2 llamadas a getrandbits(64) para construir
-    # los 128 bits altos del nonce -> las predecimos con el rng ya clonado
     a = rc.predict_getrandbits(64)
     b = rc.predict_getrandbits(64)
     return arma_trozo_nonce(a, b, pos)
 
 
-# --- parte 2: el rollo matematico del hidden number problem con LLL ---
-# esto es lo que mas me costo entender la verdad, va a base de intentar
-# encontrar el vector "mas cercano" en una especie de rejilla de numeros
+
+# LLL
 
 def gram_schmidt(matriz):
-    # ortogonaliza la base, paso previo que necesita el algoritmo de Babai
     n = len(matriz)
     dim = len(matriz[0])
     base_ortog = [None] * n
@@ -173,7 +161,6 @@ def gram_schmidt(matriz):
 
 
 def babai_vecino_mas_cercano(matriz, objetivo):
-    # algoritmo de Babai: busca el punto de la rejilla mas cercano a "objetivo"
     n = len(matriz)
     dim = len(objetivo)
     base_ortog = gram_schmidt(matriz)
@@ -194,9 +181,7 @@ def babai_vecino_mas_cercano(matriz, objetivo):
 
 
 def hacer_lll(matriz):
-    # aqui usamos la libreria fpylll, que ya tiene el LLL implementado
-    # (esto es un algoritmo de reduccion de retículos, no lo voy a
-    # reimplementar yo a mano jajaja)
+    #  libreria fpylll, que ya tiene el LLL implementado
     n = len(matriz)
     dim = len(matriz[0])
     m = IntegerMatrix(n, dim)
@@ -204,22 +189,15 @@ def hacer_lll(matriz):
         for j in range(dim):
             m[i, j] = int(matriz[i][j])
     LLL.reduction(m)
-    # ojo: aqui hay que forzar int() porque en mi sagemath (probado con un
-    # compa) fpylll devuelve un tipo raro de numero propio de sage y luego
-    # petaba todo al mezclarlo con Fraction. con el int() de mas se arregla
+    #  forzar int() por problema con sagemath en mi consola
     return [[int(m[i, j]) for j in range(dim)] for i in range(n)]
 
 
 def buscar_clave_unidad(firmas):
-    """
-    firmas: lista de (r, s, z, A) de UNA misma unidad (misma clave secreta)
-    A = la parte de arriba del nonce que ya predijimos, desplazada.
-    Esto va soltando candidatos a clave privada, hay que probarlos
-    contra la clave publica para ver cual es el bueno.
-    """
+   
     m = len(firmas)
     if m < 2:
-        # con 1 sola firma no se puede montar el sistema, hace falta al menos 2
+        # con 1 sola firma no se puede montar el sistema, se necesitan 2
         return
 
     t_list, c_list = [], []
@@ -240,8 +218,7 @@ def buscar_clave_unidad(firmas):
     dim_extra = len(w_list)
     dim = dim_extra + 1
 
-    # construimos la matriz para el LLL: N en la diagonal (para poder
-    # movernos en modulo N) y una fila mas con los coeficientes w
+    # construimos la matriz para el LLL
     matriz = []
     for i in range(dim_extra):
         fila = [0] * dim
@@ -253,12 +230,7 @@ def buscar_clave_unidad(firmas):
     objetivo = b_list + [0]
     cercano = babai_vecino_mas_cercano(matriz_reducida, objetivo)
 
-    # el ultimo numero del vector deberia ser el "trocito pequeño" que
-    # nos faltaba de la primera firma (x0)
     x0_candidato = cercano[-1]
-
-    # a veces sale con el signo cambiado o desviado un pelin, asi que
-    # probamos varias variantes por si acaso (mejor sobra que falte)
     candidatos = set()
     for signo in (1, -1):
         for delta in range(-4, 5):
@@ -267,11 +239,6 @@ def buscar_clave_unidad(firmas):
     for x0 in candidatos:
         d = (t0_inv * (x0 - c_list[0])) % N
         yield d
-
-
-# --- parte de red: hablar con el server a pelo, sin pwntools ---
-# hice mi propia mini clase porque instalar pwntools me daba mil dolores
-# de cabeza con dependencias que no necesito para esto
 
 class Conexion:
     def __init__(self, host, puerto, timeout=10):
@@ -314,7 +281,7 @@ class Conexion:
             pass
 
 
-# --- funciones para hablar con cada opcion del menu ---
+# funciones para el Menu
 
 def pedir_panel(io):
     io.sendline(b"5")
@@ -369,8 +336,7 @@ def mandar_codigo(io, clave):
 
 def main():
     io = Conexion(IP, PUERTO)
-    io.recvuntil(b"menu> ")  # nos comemos el logo ascii y el primer menu
-
+    io.recvuntil(b"menu> ")  
     print("[*] pidiendo el panel de datos 9 veces...")
     panel = {}
     for i in range(TABLE_LIMIT):
@@ -411,8 +377,7 @@ def main():
         if pub is None:
             continue
         for d in buscar_clave_unidad(firmas):
-            # comprobacion rapida con los bits que ya sabiamos, para no
-            # perder tiempo haciendo multiplicacion de curva si ya no cuadra
+            # comprobacion rapida con los bits que ya sabiamos
             if (d >> (D_SIZE + A_LOW_SIZE)) != tag_high:
                 continue
             if (d & ((1 << A_LOW_SIZE) - 1)) != tag_low:
